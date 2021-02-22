@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Maze2</title>
+<style>
+	#myCanvas {
+        border: solid red 1px;
+    }
+	.text {
+		display: block;
+	}
+</style>
+<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+</head>
+<body onload="initialize()">
+	<div style="display: inline-block; vertical-align: top">
+	<input type="text" id="text1" class="text">
+	<input type="text" id="text2" class="text">
+	<input type="text" id="text3" class="text">
+	</div>
+    <div id='ts'></div>
+    <div id='ts1'></div>
+    
+</body>
+
+<script>
+
+
+function initialize() {	
+	myGameArea.start(610,510);
+}
+document.addEventListener("keydown", handleKeyPress);
+
+//*******************************************socket stuff*************************************
+var socket = io.connect();
+var frame=0;
+socket.on("mapUpdate", function(msg){
+		if (typeof myGameArea.context=='undefined')return;
+	var obj=JSON.parse(msg);
+
+    frame=obj.frame;
+
+    if (frame%50==0) socket.emit("imAlive", myID);
+
+    var mx=obj.mx;
+    var my=obj.my;
+	var playersObj=obj.playersObj;
+    map=obj.map;
+    myGameArea.clear();
+    
+    for (y=0+offsety;y<16+offsety;y++){
+        for (x=0+offsetx;x<19+offsetx;x++){            
+            if (obj.map[x][y]=="#") myGameArea.context.drawImage( tileIMG, 3*32, 1*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="W") myGameArea.context.drawImage( tileIMG, 3*32, 21*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="C") myGameArea.context.drawImage( tileIMG, 0*32, 11*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="B") myGameArea.context.drawImage( tileIMG, 10*32, 2*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]==" ") myGameArea.context.drawImage( tileIMG, 1*32, 2*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="S") myGameArea.context.drawImage( tileIMG, 21*32, 4*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y].charAt(0)=="T") myGameArea.context.drawImage( sheetIMG, 7*32, 23*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+ 
+            //draw other players           
+            //if (obj.map[x][y]=="P") myGameArea.context.drawImage( peopleIMG, 9*32, 0*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+        }
+       
+    }
+
+    //draw player 
+	document.getElementById('ts1').innerHTML=":" + obj.map[px][py]+":";
+	if (obj.map[px][py].charAt(0)=="T"){
+		var a=obj.map[px][py].split(',');
+		px=parseInt(a[1]);
+		py=parseInt(a[2]);
+		document.getElementById("text1").value=px;
+		document.getElementById("text2").value=py;
+	}
+	if (obj.map[px][py].charAt(0)=="T"	&& edit==false){
+		var a=obj.map[px][py].split(',');
+		px=parseInt(a[1]);
+		py=parseInt(a[2]);
+		offsetx=px-9;
+		offsety=py-8;
+		if (offsetx<0) offsetx=0;
+		if (offsety<0) offsety=0;
+		if (offsetx>100-19) offsetx=100-19;
+		if (offsety>100-16) offsety=100-16;
+		socket.emit("playerMove", myID + "," + px + "," + py);
+	}
+    myGameArea.context.drawImage(peopleIMG, 9*32, 0*32, 32, 32, (px-offsetx)*32, (py-offsety)*32, 32, 32 );
+	
+	//draw other players
+	for (i=0;i<playersObj.length;i++){
+		//map[playersObj[i].px][playersObj[i].py]="P";
+		myGameArea.context.drawImage(peopleIMG, 9*32, 0*32, 32, 32, (playersObj[i].px-offsetx)*32, (playersObj[i].py-offsety)*32, 32, 32 );
+    }
+	
+	var d=["brick","water","cactus","bridge","shop","teleporter"]; 
+	document.getElementById('ts').innerHTML="ID:" + myID + "  frame:" + frame + "  px:" + px + "  py:" + py + "  offsetx:" + offsetx + "  offsety:" + offsety + " edit:" + edit + " block:" + d[block-1];
+    //document.getElementById('ts1').innerHTML=str;
+});	
+//******************************************end socket stuff***************************************
+var myID=Math.floor(Math.random() * 1000000);
+
+var tileIMG=new Image();
+tileIMG.src="tilesv2.png";
+var peopleIMG=new Image();
+peopleIMG.src="people.png";
+var sheetIMG=new Image();
+sheetIMG.src="RgrrM96.jpg";
+
+var px=2;
+var py=2;
+var offsetx=0;
+var offsety=0;
+
+var map=[];
+for (x=0;x<100;x++){
+    map[x]=[];
+}
+
+
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),	
+	
+    start : function(x,y) {
+        this.canvas.width = x;
+        this.canvas.height = y;
+        this.canvas.id='myCanvas';
+		
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        
+    },
+	
+	size : function(x,y) {
+		this.canvas.width = x;
+        this.canvas.height = y;
+	},
+		
+    clear : function() {
+		if (typeof this.context=='undefined')return;
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }    
+}
+
+var edit=false;
+var block=1;
+var walk=["B","S","T"];
+function handleKeyPress(e) {
+	var key=e.keyCode;
+    //alert(key);
+	if ((key==68 || key==39) && px<99) { //right
+        if (map[px+1][py]==" " || edit || walk.includes(map[px+1][py].charAt(0))) px++;
+    }
+    if ((key==65 || key==37) && px>0) { //left
+        if (map[px-1][py]==" " || edit || walk.includes(map[px-1][py].charAt(0))) px--;
+    }
+    if ((key==87 || key==38) && py>0) { //up
+        if (map[px][py-1]==" " || edit || walk.includes(map[px][py-1].charAt(0))) py--;
+    }
+    if ((key==83 || key==40) && py<99) { //down
+        if (map[px][py+1]==" " || edit || walk.includes(map[px][py+1].charAt(0))) py++;
+    }
+	if (key==32) { //place
+		var t1=document.getElementById("text1").value;
+		var t2=document.getElementById("text2").value;
+		var t3=document.getElementById("text3").value;
+		if (block==6){
+			if (t1=="" || t2==""){
+			alert("enter x and y cords");
+			return;
+			}
+			socket.emit("addBlock", myID + "," + px + "," + py + "," + block + "," + t1 + "," + t2);
+			return;
+		}
+        socket.emit("addBlock", myID + "," + px + "," + py + "," + block);
+    }
+	if (key==49) { //place
+        block=1;
+    }
+	if (key==50) { //place
+        block=2;
+    }
+	if (key==27) { //place
+        socket.emit("saveMap","");
+    }
+	if (key==48) { //place
+        edit=!edit;
+    }
+	if (key==8) { //place
+        block=0;
+    }
+	if (key==51) { //place
+        block=3;
+    }
+	if (key==52) { //place
+        block=4;
+    }
+	if (key==53) { //place
+        block=5;
+    }
+	if (key==54) { //place
+        block=6;
+    }
+    offsetx=px-9;
+    offsety=py-8;
+    if (offsetx<0) offsetx=0;
+    if (offsety<0) offsety=0;
+    if (offsetx>100-19) offsetx=100-19;
+    if (offsety>100-16) offsety=100-16;
+	socket.emit("playerMove", myID + "," + px + "," + py);
+}
+
+ 
+
+</script>
+</html>
