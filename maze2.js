@@ -53,14 +53,18 @@ for (x=0;x<mx;x++) {
 		fs.readFile("map.txt", function (err, data){
 			if(err) console.log(err);
 			map=JSON.parse(data);
+			spawnArmys();
 		});
+		
+
+		
 
 var frame=0;
 setInterval(gameLoop,60);
 
 var players=[];
 var playersObj=[];
-
+var army=[];
 //****************************************End Globals */
 
 
@@ -150,27 +154,158 @@ io.on("connection", function(socket){
 		}	
 		map[parseInt(place[1])][parseInt(place[2])]=b;
     });
+	
+	socket.on("hitArmy", function(msg, callback){				
+		console.log(msg);	
+		var place=msg.split(',');
+		var Gold=Math.floor(Math.random()*10)+11;
+		army[parseInt(place[0])].hp-=parseInt(place[1]);
+		if (army[parseInt(place[0])].hp<=0){
+			army.splice(parseInt(place[0]), 1);
+			io.sockets.emit("giveGold",place[2] + "," +Gold);
+		}
+
+
+	
+    });
+	
+	socket.on("clearBlock", function(msg, callback){				
+		console.log(msg);	
+		var place=msg.split(',');
+				
+		map[parseInt(place[1])][parseInt(place[2])]=" ";
+    });
 
 	socket.on("saveMap", function(msg, callback){				
 		var fs=require('fs');
-		fs.writeFile("map.txt", JSON.stringify(map), function (err){
+		var clone=[...map];
+		for (x=0;x<99;x++){
+			for (y=0;y<99;y++){
+				if (clone[x][y]=="|" || clone[x][y]=="H" || clone[x][y]=="G") clone[x][y]=" ";
+			}
+		}
+		fs.writeFile("map.txt", JSON.stringify(clone), function (err){
 			if(err) console.log(err);
 		});
+		
 
-    });
+    });		
+	
+	
+	
 }); 
+
+
  
 //********************************end of socket io stuff
+function spawnArmys(){
+	//return;
+	for(i=0;i<5;i++){
+		var flag=true;
+		while(flag){
+			var x=Math.floor(Math.random()*99);
+			var y=Math.floor(Math.random()*99);
+			var a={
+				x:x,
+				y:y,
+				hp:20,
+				ap:Math.floor(Math.random()*3)+1
+			}
+			if (map[x][y]==" ") flag=false;
+		}
+		console.log("spawning" + a);
+		army.push(a);
+	}
+}
+
+
+
 
 function gameLoop() {
-    frame++;    
+    frame++; 
+
+	if (army.length==0 && frame>1000){
+		spawnArmys();
+	}
+		
+	
+	var gcnt=0;
+	var bcnt=0;
+	var scnt=0;
+	for (x=0;x<99;x++){
+		for (y=0;y<99;y++){
+			if (map[x][y]=="|")scnt++;
+			if (map[x][y]=="G")gcnt++;
+			if (map[x][y]=="H")bcnt++
+		}	
+	}
+	
     
+	if (frame%100==0 && gcnt<25){
+		var flag=true;
+		while(flag){
+			var x=Math.floor(Math.random()*99)
+			var y=Math.floor(Math.random()*99)
+			if (map[x][y] == " "){
+				map[x][y]="G";
+				console.log("Gold added at" + x + "," + y);
+				flag=false;
+			}	
+		}		
+	}
+
+	if (frame%100==0 && bcnt<20){
+		var flag=true;
+		while(flag){
+			var x=Math.floor(Math.random()*99)
+			var y=Math.floor(Math.random()*99)
+			if (map[x][y] == " "){
+				map[x][y]="H";
+				console.log("Health Bottle added at" + x + "," + y);
+				flag=false;
+			}	
+		}		
+	}	
+	if (frame%500==0 && scnt<10){
+		var flag=true;
+		while(flag){
+			var x=Math.floor(Math.random()*99)
+			var y=Math.floor(Math.random()*99)
+			if (map[x][y] == " "){
+				map[x][y]="|";
+				console.log("sword added at" + x + "," + y);
+				flag=false;
+			}	
+		}		
+	}	
+	if (frame%50==0){
+		for (i=0;i<army.length;i++){
+			var d=Math.floor(Math.random()*8);
+			
+			
+			if (army[i].x==0 && d==2){d=3}
+			if (army[i].x==99 && d==3){d=2}
+			if (army[i].y==0 && d==0){d=1}
+			if (army[i].y==99 && d==1){d=0}
+			if (d==0 && map[army[i].x][(army[i].y)-1]==" "){army[i].y--};
+			if (d==1 && map[army[i].x][(army[i].y)+1]==" "){army[i].y++};
+			if (d==2 && map[(army[i].x)-1][army[i].y]==" "){army[i].x--};
+			if (d==3 && map[(army[i].x)+1][army[i].y]==" "){army[i].x++};
+			if (army[i].x<0){army[i].x=0};
+			if (army[i].x>99){army[i].x=99};
+			if (army[i].y<0){army[i].y=0};
+			if (army[i].y>99){army[i].y=99};
+		}
+	}	
+	
+	
     var payload={
         frame: frame,
         mx: mx,
         my: my,
         map: map, 
-		playersObj: playersObj
+		playersObj: playersObj,
+		army: army
     }
     io.sockets.emit("mapUpdate", JSON.stringify(payload));
 }

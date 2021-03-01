@@ -45,8 +45,12 @@ socket.on("mapUpdate", function(msg){
     var mx=obj.mx;
     var my=obj.my;
 	var playersObj=obj.playersObj;
+	var army=obj.army;
     map=obj.map;
     myGameArea.clear();
+	
+	
+	if (frame%10000==0 && hp<20) hp++;
     
     for (y=0+offsety;y<16+offsety;y++){
         for (x=0+offsetx;x<19+offsetx;x++){            
@@ -57,15 +61,22 @@ socket.on("mapUpdate", function(msg){
 			if (obj.map[x][y]==" ") myGameArea.context.drawImage( tileIMG, 1*32, 2*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
 			if (obj.map[x][y]=="S") myGameArea.context.drawImage( tileIMG, 21*32, 4*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
 			if (obj.map[x][y].charAt(0)=="T") myGameArea.context.drawImage( sheetIMG, 7*32, 23*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
- 
+			if (obj.map[x][y]=="G") myGameArea.context.drawImage( sheetIMG, 11*32, 14*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="H") myGameArea.context.drawImage( sheetIMG, 25*32, 17*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			if (obj.map[x][y]=="|") myGameArea.context.drawImage( sheetIMG, 33*32, 11*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
+			//socket.on("clearItem") function(msg){
+			//	if (obj.map[x][y]=="G"){obj.map[x][y]=" "}
+			//	if (obj.map[x][y]=="H"){obj.map[x][y]=" "}
+			//	if (obj.map[x][y]=="|"){obj.map[x][y]=" "}
+			//}
             //draw other players           
             //if (obj.map[x][y]=="P") myGameArea.context.drawImage( peopleIMG, 9*32, 0*32, 32, 32, (x-offsetx)*32, (y-offsety)*32, 32, 32 );
         }
        
     }
-
+	
     //draw player 
-	document.getElementById('ts1').innerHTML=":" + obj.map[px][py]+":";
+	document.getElementById('ts1').innerHTML=":" + obj.map[px][py]+":" + "<br>" + JSON.stringify(obj.army) ;
 	if (obj.map[px][py].charAt(0)=="T"){
 		var a=obj.map[px][py].split(',');
 		px=parseInt(a[1]);
@@ -89,14 +100,44 @@ socket.on("mapUpdate", function(msg){
 	
 	//draw other players
 	for (i=0;i<playersObj.length;i++){
-		//map[playersObj[i].px][playersObj[i].py]="P";
+
 		myGameArea.context.drawImage(peopleIMG, 9*32, 0*32, 32, 32, (playersObj[i].px-offsetx)*32, (playersObj[i].py-offsety)*32, 32, 32 );
     }
 	
+	//draw armys
+	for (i=0;i<army.length;i++){
+
+		myGameArea.context.drawImage(sheetIMG, 6*32, 2*32, 32, 32, (army[i].x-offsetx)*32, (army[i].y-offsety)*32, 32, 32 );
+		if (army[i].x==px && army[i].y==py && frame%5==0){
+			hp-=army[i].ap;
+			socket.emit("hitArmy",i + "," + atc + "," + myID);
+			if (hp<=0){
+				hp=20;
+				px=1;
+				py=1;
+			}
+		}
+    }
+	//draw status
+	
+	myGameArea.context.font = "30px Arial";
+	myGameArea.context.strokeText("hp:" + hp,0,25);
+	myGameArea.context.font = "30px Arial";
+	myGameArea.context.strokeText("attack power:" + atc,80,25)
+		myGameArea.context.font = "30px Arial";
+	myGameArea.context.strokeText("Gold:" + gold,280,25)
+	
 	var d=["brick","water","cactus","bridge","shop","teleporter"]; 
-	document.getElementById('ts').innerHTML="ID:" + myID + "  frame:" + frame + "  px:" + px + "  py:" + py + "  offsetx:" + offsetx + "  offsety:" + offsety + " edit:" + edit + " block:" + d[block-1];
+	document.getElementById('ts').innerHTML="ID:" + myID + "  frame:" + frame + "  px:" + px + "  py:" + py + "  offsetx:" + offsetx + "  offsety:" + offsety + " edit:" + edit + " block:" + d[block-1] + "," + "hp bottles:" + bottles;
     //document.getElementById('ts1').innerHTML=str;
 });	
+
+socket.on("giveGold", function(msg){
+	var place=msg.split(',');
+	if (myID==place[0]){
+	gold+=parseInt(place[1]);
+	}
+});
 //******************************************end socket stuff***************************************
 var myID=Math.floor(Math.random() * 1000000);
 
@@ -116,7 +157,11 @@ var map=[];
 for (x=0;x<100;x++){
     map[x]=[];
 }
-
+var hp=20;
+var gold=0;
+var atc=1;
+var army=[];
+var bottles=0;
 
 
 var myGameArea = {
@@ -143,9 +188,10 @@ var myGameArea = {
     }    
 }
 
+
 var edit=false;
 var block=1;
-var walk=["B","S","T"];
+var walk=["B","S","T","G","H","|"];
 function handleKeyPress(e) {
 	var key=e.keyCode;
     //alert(key);
@@ -161,6 +207,35 @@ function handleKeyPress(e) {
     if ((key==83 || key==40) && py<99) { //down
         if (map[px][py+1]==" " || edit || walk.includes(map[px][py+1].charAt(0))) py++;
     }
+	if (map[px][py]=="G"){
+		gold++;
+		socket.emit("clearBlock", myID + "," + px + "," + py);
+	}
+	if (map[px][py]=="H" && hp<20){
+		hp++;
+		socket.emit("clearBlock", myID + "," + px + "," + py);
+	}
+	if (map[px][py]=="H" && hp==20){
+		bottles++;
+		socket.emit("clearBlock", myID + "," + px + "," + py);
+	}
+	if (key==69 && hp<20 && bottles>0) {
+		bottles--
+		hp++
+    }
+	
+	
+	if (map[px][py].charAt(0)=="T"){
+		hp--;
+	}
+	if (map[px][py]=="S" && gold>0){
+		bottles++;
+		gold--;
+	}
+	if (map[px][py].charAt(0)=="|"){
+		atc++;
+		socket.emit("clearBlock", myID + "," + px + "," + py);
+	}
 	if (key==32) { //place
 		var t1=document.getElementById("text1").value;
 		var t2=document.getElementById("text2").value;
@@ -211,7 +286,8 @@ function handleKeyPress(e) {
 	socket.emit("playerMove", myID + "," + px + "," + py);
 }
 
- 
+
+
 
 </script>
 </html>
